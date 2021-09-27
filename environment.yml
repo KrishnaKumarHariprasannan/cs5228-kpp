@@ -1,0 +1,23 @@
+name: kdd
+channels:
+  - defaults
+dependencies:
+  - conda
+  - python=3.9
+  - python.app
+  - jupyterlab
+  - jupyterlab_code_formatter
+  - black
+  - matplotlib
+  - plotly
+  - ipykernel
+  - pip
+  - scikit-learn
+  - pandas
+  - seaborn
+  - pytorch=1.9.0
+  - jupyterlab-git
+  - jupyterlab_execute_time
+  - ipdb
+  - pyyaml
+prefix: /Users/krishnakumar/miniconda3
