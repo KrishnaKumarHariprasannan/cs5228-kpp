@@ -1,23 +1,28 @@
 name: kdd
 channels:
+  - conda-forge
   - defaults
 dependencies:
   - conda
   - python=3.9
-  - python.app
   - jupyterlab
   - jupyterlab_code_formatter
   - black
   - matplotlib
   - plotly
   - ipykernel
+  - ipywidgets
   - pip
   - scikit-learn
   - pandas
   - seaborn
   - pytorch=1.9.0
   - jupyterlab-git
+  - jupyterlab_widgets
   - jupyterlab_execute_time
   - ipdb
-  - pyyaml
-prefix: /Users/krishnakumar/miniconda3
+  - tqdm
+  - pip:
+      - efficient-apriori==1.1.1
+      - jupyterlab-notify==1.0.0
+      - pyflyby==1.6.8
