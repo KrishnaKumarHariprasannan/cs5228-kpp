@@ -1,33 +1,9 @@
-
 import numpy as np
 import pandas as pd
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-from scipy.stats import loguniform
-from datetime import datetime
-from datetime import datetime
 import logging
-import numpy as np
-import pandas as pd
-from sklearn import compose
-from sklearn.pipeline import Pipeline
-from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.impute import SimpleImputer
-
-from utils import *
-
-from sklearn.metrics import mean_squared_error
-from datetime import datetime
-import logging
-import numpy as np
-import pandas as pd
-from sklearn import compose
-from sklearn.pipeline import Pipeline
-from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.impute import SimpleImputer
 import scipy
 
+from datetime import datetime
 from sklearn.base import BaseEstimator, TransformerMixin
 
 
@@ -36,6 +12,19 @@ DATASET_GENERATION_DATE = datetime(2021, 9, 14)
 FIELDS_TO_DROP = ["indicative_price", "eco_category"]
 
 
+def get_make_from_title(make_list, title):
+    title = title.split(' ')
+    for i in range(len(title)):
+        if (' '.join(title[0:i+1]) in make_list):
+            return ' '.join(title[0:i+1])
+    return 'unknwon'
+
+def make_category_vector(cat_list, x):
+    vector = [0] * len(cat_list)
+    for i, cat in enumerate(cat_list):
+        if cat in x:
+            vector[i] = 1
+    return vector
 
 class PreProcessing(BaseEstimator, TransformerMixin):
     def __init__(self):
@@ -65,8 +54,6 @@ class PreProcessing(BaseEstimator, TransformerMixin):
         )
         df.loc[:, "make_model"] = df.make + "-" + "df.model"
         return df
-
-
 
 
 class PostProcessing(BaseEstimator, TransformerMixin):
@@ -99,10 +86,6 @@ class PostProcessing(BaseEstimator, TransformerMixin):
         df = input_df.copy()
         df = df.drop(self.columns_to_drop, axis=1, errors="ignore")
         return df
-
-from sklearn.base import BaseEstimator, TransformerMixin
-
-from sklearn.base import BaseEstimator, TransformerMixin
 
 
 class GroupMissingValueImputer(BaseEstimator, TransformerMixin):
@@ -152,6 +135,7 @@ class GroupMissingValueImputer(BaseEstimator, TransformerMixin):
             return df
         return df
 
+
 class MeanMissingValueImputer(BaseEstimator, TransformerMixin):
     def __init__(self, cols, agg="mean"):
         self.mapping = {}
@@ -173,7 +157,6 @@ class MeanMissingValueImputer(BaseEstimator, TransformerMixin):
 
 
 class SplitValuesToColumn(BaseEstimator, TransformerMixin):
-
     def __init__(self, col):
         self.val_list = {}
         self.col = col
@@ -641,13 +624,14 @@ class CountUniqueItemsFeatureCreator(BaseEstimator, TransformerMixin):
         modified_x[self.new_feature_name] = self.new_feature
         return modified_x
 
+
 class CarSpecificationsTransformer(BaseEstimator, TransformerMixin):
-    def __init__(self, col, group_cols, agg='mean'):
+    def __init__(self, col, group_cols, agg="mean"):
         self.group_mapping_list = []
         self.group_cols = group_cols
         self.col = col
-        self.agg = agg 
-        
+        self.agg = agg
+
     def get_key(self, row, group_columns):
         lst = []
         if len(group_columns) > 1:
@@ -656,15 +640,22 @@ class CarSpecificationsTransformer(BaseEstimator, TransformerMixin):
             return tuple(lst)
         else:
             return row[group_columns[0]]
-    
+
     def fit(self, df):
         group_cols = self.group_cols.copy()
         col = self.col
         for i in range(len(group_cols)):
-            if self.agg == 'mean':
-                group_mapping = df[~df[col].isnull()].groupby(group_cols).mean()[col].to_dict()
-            elif self.agg == 'mode':
-                group_mapping = df[~df[col].isnull()].groupby(group_cols).agg(lambda x: scipy.stats.mode(x)[0])[col].to_dict()
+            if self.agg == "mean":
+                group_mapping = (
+                    df[~df[col].isnull()].groupby(group_cols).mean()[col].to_dict()
+                )
+            elif self.agg == "mode":
+                group_mapping = (
+                    df[~df[col].isnull()]
+                    .groupby(group_cols)
+                    .agg(lambda x: scipy.stats.mode(x)[0])[col]
+                    .to_dict()
+                )
             self.group_mapping_list.append(group_mapping)
             group_cols.pop()
         return self
@@ -674,39 +665,58 @@ class CarSpecificationsTransformer(BaseEstimator, TransformerMixin):
         df = input_df.copy()
         for group_mapping in self.group_mapping_list:
             col = self.col
-            
+
             if col is not None and col in df.columns:
-                result = df.apply(lambda row: group_mapping.get(self.get_key(row, group_cols)) if pd.isnull(row[col]) else row[col],
-                axis=1)
+                result = df.apply(
+                    lambda row: group_mapping.get(self.get_key(row, group_cols))
+                    if pd.isnull(row[col])
+                    else row[col],
+                    axis=1,
+                )
                 df.loc[:, col] = result
             group_cols.pop()
         return df
-    
+
+
 class CarSpecsMissingWithTypeOfVehicle(BaseEstimator, TransformerMixin):
-    def __init__(self, cols, agg='mean'):
+    def __init__(self, cols, agg="mean"):
         self.group_mapping = {}
         self.group_mapping_list = []
         self.cols = cols
-        self.agg = agg 
-        
+        self.agg = agg
+
     def fit(self, df):
         for col in self.cols:
-            if self.agg == 'mean':
-                group_mapping = df[~df[col].isnull()].groupby('type_of_vehicle').mean()[col].to_dict()
-            elif self.agg == 'mode':
-                group_mapping = df[~df[col].isnull()].groupby('type_of_vehicle').agg(lambda x: scipy.stats.mode(x)[0])[col].to_dict()
+            if self.agg == "mean":
+                group_mapping = (
+                    df[~df[col].isnull()]
+                    .groupby("type_of_vehicle")
+                    .mean()[col]
+                    .to_dict()
+                )
+            elif self.agg == "mode":
+                group_mapping = (
+                    df[~df[col].isnull()]
+                    .groupby("type_of_vehicle")
+                    .agg(lambda x: scipy.stats.mode(x)[0])[col]
+                    .to_dict()
+                )
             self.group_mapping_list.append(group_mapping)
         return self
-        
+
     def transform(self, input_df):
         cols = self.cols
         df = input_df.copy()
         group_mapping_list = self.group_mapping_list
-        
+
         for i in range(len(group_mapping_list)):
             col = cols[i]
             if col is not None and col in df.columns:
-                result = df.apply(lambda row: group_mapping_list[i].get(row['type_of_vehicle']) if pd.isnull(row[col]) else row[col],
-                axis=1)
+                result = df.apply(
+                    lambda row: group_mapping_list[i].get(row["type_of_vehicle"])
+                    if pd.isnull(row[col])
+                    else row[col],
+                    axis=1,
+                )
                 df.loc[:, col] = result
         return df
