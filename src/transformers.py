@@ -343,14 +343,14 @@ class ArfTransformer(BaseEstimator, TransformerMixin):
         return arf
 
     def fit(self, X):
-        # Compute arf from omv for those records that have null arf
-        rows_without_arf = X[X["arf"].isnull()]
-        self.computed_arf = rows_without_arf["omv"].apply(self.compute_arf)
-        self.computed_arf.rename("arf_computed", inplace=True)
+
         return self
 
     def transform(self, X):
-        modified_x = X.join(self.computed_arf)
+        rows_without_arf = X[X["arf"].isnull()]
+        computed_arf = rows_without_arf["omv"].apply(self.compute_arf)
+        computed_arf.rename("arf_computed", inplace=True)
+        modified_x = X.join(computed_arf)
         modified_x["arf"].fillna(modified_x["arf_computed"], inplace=True)
         modified_x.drop("arf_computed", axis=1, inplace=True)
 
