@@ -566,7 +566,7 @@ class DeregValueTransformer(BaseEstimator, TransformerMixin):
             if self.fill_zero:
                 logging.info(
                     f"DeregValueTransformer - replacing {len(modified_x[null_mask])} null values with 0")
-                modified_x.loc[~null_mask, "dereg_value"] = 0
+                modified_x.loc[null_mask, "dereg_value"] = 0
             else:
                 logging.info(
                     f"DeregValueTransformer - removing {len(modified_x[null_mask])} for which dereg_value cannot be computed")
@@ -589,7 +589,7 @@ class DepreciationTransformer(BaseEstimator, TransformerMixin):
 
     def transform(self, X):
         modified_x = X.copy()
-        depreciation_mask = X["depreciation"].isnull()
+        depreciation_mask = X.depreciation.isnull()
 
         # Ideally, this should be (price - parf) / no_of_coe_years_left but this formula gives
         # depreciation which are vastly different to the ones in the given dataset - because of incorrect coe_start_date
@@ -601,7 +601,7 @@ class DepreciationTransformer(BaseEstimator, TransformerMixin):
             if self.fill_zero:
                 logging.info(
                     f"DepreciationTransformer - replacing {len(modified_x[depreciation_mask])} null values with 0")
-                modified_x.loc[~depreciation_mask, "depreciation"] = 0
+                modified_x.loc[depreciation_mask, "depreciation"] = 0
             else:
                 logging.info(
                     f"DepreciationTransformer - removing {len(modified_x[depreciation_mask])} rows with null depreciation"
