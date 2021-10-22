@@ -1,28 +1,28 @@
-name: kdd
+name: kpp
 channels:
   - conda-forge
   - defaults
 dependencies:
-  - conda
-  - python=3.9
-  - jupyterlab
-  - jupyterlab_code_formatter
   - black
-  - matplotlib
-  - plotly
-  - ipykernel
-  - ipywidgets
-  - pip
-  - scikit-learn
-  - pandas
-  - seaborn
-  - pytorch=1.9.0
-  - jupyterlab-git
-  - jupyterlab_widgets
-  - jupyterlab_execute_time
   - ipdb
+  - ipykernel
+  - ipython
+  - ipywidgets
+  - jupyterlab
+  - jupyterlab-git
+  - jupyterlab_code_formatter
+  - jupyterlab_execute_time
+  - jupyterlab_widgets
+  - matplotlib
+  - numpy
+  - pandas
+  - pip
+  - pyflakes
+  - python
+  - pytorch
+  - scikit-learn
+  - seaborn
   - tqdm
   - pip:
       - efficient-apriori==1.1.1
       - jupyterlab-notify==1.0.0
-      - pyflyby==1.6.8

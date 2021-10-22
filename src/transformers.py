@@ -15,8 +15,8 @@ FIELDS_TO_DROP = ["indicative_price", "eco_category"]
 def get_make_from_title(make_list, title):
     title = title.split(" ")
     for i in range(len(title)):
-        if " ".join(title[0 : i + 1]) in make_list:
-            return " ".join(title[0 : i + 1])
+        if " ".join(title[0: i + 1]) in make_list:
+            return " ".join(title[0: i + 1])
     return "unknwon"
 
 
@@ -101,15 +101,18 @@ class GroupMissingValueImputer(BaseEstimator, TransformerMixin):
         col = self.col
         if self.agg == "first":
             self.group_mapping = (
-                df[~df[col].isnull()].groupby(self.group_cols).first()[col].to_dict()
+                df[~df[col].isnull()].groupby(
+                    self.group_cols).first()[col].to_dict()
             )
         elif self.agg == "mean":
             self.group_mapping = (
-                df[~df[col].isnull()].groupby(self.group_cols).mean()[col].to_dict()
+                df[~df[col].isnull()].groupby(
+                    self.group_cols).mean()[col].to_dict()
             )
         elif self.agg == "median":
             self.group_mapping = (
-                df[~df[col].isnull()].groupby(self.group_cols).median()[col].to_dict()
+                df[~df[col].isnull()].groupby(
+                    self.group_cols).median()[col].to_dict()
             )
         else:
             raise Exception("Unknown Agg type")
@@ -213,7 +216,8 @@ class CarSpecificationsTransformer(BaseEstimator, TransformerMixin):
         for i in range(len(group_cols)):
             if self.agg == "mean":
                 group_mapping = (
-                    df[~df[col].isnull()].groupby(group_cols).mean()[col].to_dict()
+                    df[~df[col].isnull()].groupby(
+                        group_cols).mean()[col].to_dict()
                 )
             elif self.agg == "mode":
                 group_mapping = (
@@ -234,7 +238,8 @@ class CarSpecificationsTransformer(BaseEstimator, TransformerMixin):
 
             if col is not None and col in df.columns:
                 result = df.apply(
-                    lambda row: group_mapping.get(self.get_key(row, group_cols))
+                    lambda row: group_mapping.get(
+                        self.get_key(row, group_cols))
                     if pd.isnull(row[col])
                     else row[col],
                     axis=1,
@@ -279,7 +284,8 @@ class CarSpecsMissingWithTypeOfVehicle(BaseEstimator, TransformerMixin):
             col = cols[i]
             if col is not None and col in df.columns:
                 result = df.apply(
-                    lambda row: group_mapping_list[i].get(row["type_of_vehicle"])
+                    lambda row: group_mapping_list[i].get(
+                        row["type_of_vehicle"])
                     if pd.isnull(row[col])
                     else row[col],
                     axis=1,
@@ -311,7 +317,8 @@ class CoeTransformer(BaseEstimator, TransformerMixin):
 
         # Replace incorrect coe values with mean coe for 2021
         # Example: https://www.sgcarmart.com/used_cars/info.php?ID=1017335
-        combined_x.coe.replace(10.0, self.mean_coe_per_year.loc[2021].coe, inplace=True)
+        combined_x.coe.replace(
+            10.0, self.mean_coe_per_year.loc[2021].coe, inplace=True)
 
         return combined_x
 
@@ -435,7 +442,8 @@ class CoeStartDateFeatureCreator(BaseEstimator, TransformerMixin):
     def transform(self, X):
         modified_x = X.copy()
 
-        coe_df = X[["reg_date", "original_reg_date", "coe", "dereg_value"]].copy()
+        coe_df = X[["reg_date", "original_reg_date",
+                    "coe", "dereg_value"]].copy()
 
         # Consider original_reg_date/reg_date as coe_start_date in general
         coe_df["coe_start_date"] = np.where(
@@ -444,7 +452,8 @@ class CoeStartDateFeatureCreator(BaseEstimator, TransformerMixin):
         coe_df["coe_start_date"] = pd.to_datetime(coe_df["coe_start_date"])
         # Some rows have coe values as 10 - https://www.sgcarmart.com/used_cars/info.php?ID=1027957 (scraping error)
         # In such cases, consider DATASET_GENERATION_DATE as coe_start_date
-        coe_df.loc[coe_df["coe"] == 10, "coe_start_date"] = DATASET_GENERATION_DATE
+        coe_df.loc[coe_df["coe"] == 10,
+                   "coe_start_date"] = DATASET_GENERATION_DATE
 
         # Compute coe_expiry date and months left
         coe_df["coe_expiry"] = coe_df.coe_start_date + np.timedelta64(10, "Y")
@@ -458,7 +467,8 @@ class CoeStartDateFeatureCreator(BaseEstimator, TransformerMixin):
         # For rows with incorrect coe_start_date, compute it from dereg_value
         # These rows are not eligible for parf so it can be assumed that dereg_value == coe_rebate for such rows
         # cleaned_df[cleaned_df.coe_expiry_months == 0][cleaned_df.dereg_value == cleaned_df.coe_rebate]
-        filter_mask = (coe_df.coe_expiry_months == 0) & (~coe_df.dereg_value.isnull())
+        filter_mask = (coe_df.coe_expiry_months == 0) & (
+            ~coe_df.dereg_value.isnull())
         filtered_df = coe_df[filter_mask].copy()
 
         filtered_df["coe_expiry_months_computed"] = (
@@ -496,7 +506,8 @@ class CoeRebateFeatureCreator(BaseEstimator, TransformerMixin):
 
     def transform(self, X):
         modified_x = X.copy()
-        modified_x["coe_rebate"] = (modified_x.coe * modified_x.coe_expiry_months) / 120
+        modified_x["coe_rebate"] = (
+            modified_x.coe * modified_x.coe_expiry_months) / 120
 
         # If the computed coe_rebate is 0 (those records for which the coe_start_date is incorrect),
         # use dereg_value as coe_rebate.
@@ -534,6 +545,10 @@ class DeregValueTransformer(BaseEstimator, TransformerMixin):
     Imputes missing dereg_value values based on its corresponding dereg_value_computed
     """
 
+    def __init__(self, fill_zero=True):
+        super(DeregValueTransformer, self).__init__()
+        self.fill_zero = fill_zero
+
     def fit(self, X):
         return self
 
@@ -543,11 +558,20 @@ class DeregValueTransformer(BaseEstimator, TransformerMixin):
             X["dereg_value"].isnull(), X["dereg_value_computed"], X["dereg_value"],
         )
 
-        # Drop rows for which it is not possible to compute dereg_value
+        # Drop rows/Fill with zero for which it is not possible to compute dereg_value
         # This amounts to 228 rows. Example: https://www.sgcarmart.com/used_cars/info.php?ID=1031249
         # The above is due to error in scraping script which outside the scope of our problem
-        #         logging.info(f"DeregValueTransformer - dropping {len(modified_x[modified_x["dereg_value"].isnull()])} for which dereg_value cannot be computed")
-        modified_x = modified_x.loc[~modified_x["dereg_value"].isnull()]
+        null_mask = modified_x["dereg_value"].isnull()
+        if len(modified_x[null_mask]):
+            if self.fill_zero:
+                logging.info(
+                    f"DeregValueTransformer - replacing {len(modified_x[null_mask])} null values with 0")
+                modified_x.loc[~null_mask, "dereg_value"] = 0
+            else:
+                logging.info(
+                    f"DeregValueTransformer - removing {len(modified_x[null_mask])} for which dereg_value cannot be computed")
+                modified_x = modified_x.loc[~null_mask]
+
         return modified_x
 
 
@@ -556,12 +580,17 @@ class DepreciationTransformer(BaseEstimator, TransformerMixin):
     Imputes missing depreciation values based on its corresponding price and parf
     """
 
+    def __init__(self, fill_zero=True):
+        super(DepreciationTransformer, self).__init__()
+        self.fill_zero = fill_zero
+
     def fit(self, X):
         return self
 
     def transform(self, X):
         modified_x = X.copy()
-        depreciation_mask = X.depreciation.isnull()
+        depreciation_mask = X["depreciation"].isnull()
+
         # Ideally, this should be (price - parf) / no_of_coe_years_left but this formula gives
         # depreciation which are vastly different to the ones in the given dataset - because of incorrect coe_start_date
         # which in turn is due to a scraping error in dataset generation
@@ -569,10 +598,15 @@ class DepreciationTransformer(BaseEstimator, TransformerMixin):
         #             X.loc[depreciation_mask, "price"] - X.loc[depreciation_mask, "parf"]
         #         ) / 10
         if len(modified_x[depreciation_mask]):
-            logging.info(
-                f"DepreciationTransformer - found {len(modified_x[depreciation_mask])} rows with null depreciation"
-            )
-            modified_x = modified_x[~depreciation_mask]
+            if self.fill_zero:
+                logging.info(
+                    f"DepreciationTransformer - replacing {len(modified_x[depreciation_mask])} null values with 0")
+                modified_x.loc[~depreciation_mask, "depreciation"] = 0
+            else:
+                logging.info(
+                    f"DepreciationTransformer - removing {len(modified_x[depreciation_mask])} rows with null depreciation"
+                )
+                modified_x = modified_x[~depreciation_mask]
 
         return modified_x
 
@@ -624,7 +658,8 @@ class LifespanRestrictionFeatureCreator(BaseEstimator, TransformerMixin):
     def transform(self, X):
         modified_x = X.copy()
         modified_x["lifespan_restriction"] = -1
-        modified_x.loc[modified_x["lifespan"].isnull(), "lifespan_restriction"] = 1
+        modified_x.loc[modified_x["lifespan"].isnull(),
+                       "lifespan_restriction"] = 1
 
         return modified_x
 
@@ -646,7 +681,8 @@ class CountUniqueItemsFeatureCreator(BaseEstimator, TransformerMixin):
 
     def transform(self, X):
         modified_x = X.copy()
-        new_feature = pd.Series(np.zeros(len(X)), index=X.index, dtype=np.int16)
+        new_feature = pd.Series(
+            np.zeros(len(X)), index=X.index, dtype=np.int16)
         new_feature.loc[~X[self.feature].isnull()] = X[~X[self.feature].isnull()][
             self.feature
         ].apply(lambda value: len(value.split(self.separator)))
@@ -658,7 +694,7 @@ class HierarchicalGroupImputer(BaseEstimator, TransformerMixin):
     """
     For missing values in the given feature, this imputer tries filling such values with the agg value
     derived from each group and as fallback uses the entire feature columns' agg value
-    
+
     If fallback is True, for records that cannot be filled with agg value of any of the groups provided,
     it will be filled with the agg value of the feature column
     """
@@ -693,13 +729,13 @@ class HierarchicalGroupImputer(BaseEstimator, TransformerMixin):
         # If there are no empty records, return
         if not len(X[X[self.feature].isnull()]):
             logging.info(
-                f"HierarchicalGroupImputer - found null values to impute for {self.feature}"
+                f"HierarchicalGroupImputer - found no null values to impute for {self.feature}"
             )
             return X
 
         modified_x = X.copy()
         logging.info(
-            f"HierarchicalGroupImputer - found {(len(modified_x[modified_x[self.feature].isnull()]))} null values to impute for {self.feature}"
+            f"HierarchicalGroupImputer - total {(len(modified_x[modified_x[self.feature].isnull()]))} null values to impute for {self.feature}"
         )
         for group in self.groups:
             feature_computed = modified_x.join(
@@ -712,7 +748,7 @@ class HierarchicalGroupImputer(BaseEstimator, TransformerMixin):
             )
 
             logging.info(
-                f"HierarchicalGroupImputer - {(len(modified_x[modified_x[self.feature].isnull()]))} null values left to impute for {self.feature}"
+                f"HierarchicalGroupImputer - {(len(modified_x[modified_x[self.feature].isnull()]))} null values left for {self.feature} after imputing with group {group}"
             )
             if not len(modified_x[modified_x[self.feature].isnull()]):
                 break
@@ -729,7 +765,7 @@ class HierarchicalGroupImputer(BaseEstimator, TransformerMixin):
                 null_records = modified_x[self.feature].isnull()
 
                 logging.info(
-                    f"HierarchicalGroupImputer - Dropping {len(modified_x[null_records])} rows with null {self.feature} values"
+                    f"HierarchicalGroupImputer - removing {len(modified_x[null_records])} rows with null {self.feature} values"
                 )
 
                 modified_x = modified_x[~null_records]
