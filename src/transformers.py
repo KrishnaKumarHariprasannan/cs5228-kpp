@@ -292,6 +292,27 @@ class CarSpecsMissingWithTypeOfVehicle(BaseEstimator, TransformerMixin):
                 )
                 df.loc[:, col] = result
         return df
+    
+class ColumnValuesToCategory(BaseEstimator, TransformerMixin):
+    """
+    Creates a new column (new_col) with the values of column (col) converted into categories.
+    bins -> The ranges of the categories we want in the new column.
+    names -> names of the ranges of the category that will be displayed in the new column (new_col).
+    """
+    
+    def __init__(self, col, new_col, bins, names):
+        self.bins = bins
+        self.names = names
+        self.col = col
+        self.new_col = new_col
+        
+    def fit(self, df):
+        return self
+    
+    def transform(self, input_df):
+        df = input_df.copy()
+        df[self.new_col] = pd.cut(df[self.col], bins, labels=names)
+        return df
 
 
 class CoeTransformer(BaseEstimator, TransformerMixin):
