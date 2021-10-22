@@ -305,6 +305,7 @@ class CoeTransformer(BaseEstimator, TransformerMixin):
         self.mean_coe_per_year = res_of_interest.groupby("coe_start_year").agg(
             {"coe": np.mean}
         )
+        self.mean_coe = X["coe"].agg("mean")
         return self
 
     def transform(self, X):
@@ -319,6 +320,11 @@ class CoeTransformer(BaseEstimator, TransformerMixin):
         # Example: https://www.sgcarmart.com/used_cars/info.php?ID=1017335
         combined_x.coe.replace(
             10.0, self.mean_coe_per_year.loc[2021].coe, inplace=True)
+
+        coe_mask = combined_x["coe"].isnull()
+
+        if len(combined_x[coe_mask]):
+            combined_x.loc[coe_mask, "coe"] = self.mean_coe
 
         return combined_x
 
