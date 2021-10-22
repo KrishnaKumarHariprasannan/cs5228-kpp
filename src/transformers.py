@@ -311,7 +311,7 @@ class ColumnValuesToCategory(BaseEstimator, TransformerMixin):
     
     def transform(self, input_df):
         df = input_df.copy()
-        df[self.new_col] = pd.cut(df[self.col], bins, labels=names)
+        df[self.new_col] = pd.cut(df[self.col], self.bins, labels=self.names)
         return df
 
 
