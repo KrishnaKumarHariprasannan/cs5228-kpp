@@ -327,8 +327,11 @@ class OneHotTransformer(BaseEstimator, TransformerMixin):
         df = input_df.copy()
         df[self.col] = df[self.col].astype(CategoricalDtype(self.categories))
         df = pd.concat([df, pd.get_dummies(df[self.col],prefix=self.col)], axis=1)
-        if self.col in df.columns:
-            df.drop([self.col],axis=1, inplace=True)
+        # can include code if we want to drop the column we one-hot encoded.
+        # It has not been dropped yet as some other transformer might be using it.
+        # Drop it later.
+        # if self.col in df.columns:
+        #     df.drop([self.col],axis=1, inplace=True)
         return df
 
 class CoeTransformer(BaseEstimator, TransformerMixin):
