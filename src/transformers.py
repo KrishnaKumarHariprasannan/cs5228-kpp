@@ -5,6 +5,7 @@ import scipy
 
 from datetime import datetime
 from sklearn.base import BaseEstimator, TransformerMixin
+from pandas.api.types import CategoricalDtype
 
 
 # By observation of "coe_rebate", "dereg_value", "dereg_value_computed" for a few samples
@@ -292,28 +293,43 @@ class CarSpecsMissingWithTypeOfVehicle(BaseEstimator, TransformerMixin):
                 )
                 df.loc[:, col] = result
         return df
-    
+
 class ColumnValuesToCategory(BaseEstimator, TransformerMixin):
     """
     Creates a new column (new_col) with the values of column (col) converted into categories.
     bins -> The ranges of the categories we want in the new column.
     names -> names of the ranges of the category that will be displayed in the new column (new_col).
     """
-    
+
     def __init__(self, col, new_col, bins, names):
         self.bins = bins
         self.names = names
         self.col = col
         self.new_col = new_col
-        
+
     def fit(self, df):
         return self
-    
+
     def transform(self, input_df):
         df = input_df.copy()
         df[self.new_col] = pd.cut(df[self.col], self.bins, labels=self.names)
         return df
 
+class OneHotTransformer(BaseEstimator, TransformerMixin):
+    def __init__(self, col, categories):
+        self.col = col
+        self.categories = categories
+
+    def fit (self, df):
+        return self
+
+    def transform(self, input_df):
+        df = input_df.copy()
+        df[self.col] = df[self.col].astype(CategoricalDtype(self.categories))
+        df = pd.concat([df, pd.get_dummies(df[self.col],prefix=self.col)], axis=1)
+        if self.col in df.columns:
+            df.drop([self.col],axis=1, inplace=True)
+        return df
 
 class CoeTransformer(BaseEstimator, TransformerMixin):
     """
