@@ -5,6 +5,7 @@ import scipy
 
 from datetime import datetime
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.preprocessing import OneHotEncoder
 from pandas.api.types import CategoricalDtype
 
 
@@ -44,9 +45,10 @@ class PreProcessing(BaseEstimator, TransformerMixin):
         )
         df.loc[:, "reg_date"] = pd.to_datetime(df.reg_date)
         df.loc[:, "reg_date_year"] = pd.to_datetime(df.reg_date).dt.year
-        df.loc[:, "reg_date_month"] = (
-            datetime.now() - pd.to_datetime(df.reg_date)
-        ) / np.timedelta64(1, "M")
+        
+        df.loc[:, 'manufactured'] = np.where((df.manufactured.isnull()) | (df.manufactured > 2021),df['reg_date_year'],df['manufactured'])
+        
+        
         df.loc[:, "no_of_owners"] = df["no_of_owners"].fillna(1)
         df.loc[:, "title"] = df["title"].str.lower()
         df.loc[:, "make"] = df.apply(
@@ -77,7 +79,7 @@ class PostProcessing(BaseEstimator, TransformerMixin):
             "road_tax",
             "model",
             "category",
-            "make",
+            "make", "price"
         ]
         pass
 
@@ -325,6 +327,7 @@ class OneHotTransformer(BaseEstimator, TransformerMixin):
 
     def transform(self, input_df):
         df = input_df.copy()
+        df.reset_index(inplace=True, drop=True)
         df[self.col] = df[self.col].astype(CategoricalDtype(self.categories))
         df = pd.concat([df, pd.get_dummies(df[self.col],prefix=self.col)], axis=1)
         # can include code if we want to drop the column we one-hot encoded.
@@ -399,7 +402,9 @@ class ArfTransformer(BaseEstimator, TransformerMixin):
 
         return self
 
-    def transform(self, X):
+    def transform(self, df):
+        X = df.copy()
+        X.reset_index(inplace=True, drop=True)
         rows_without_arf = X[X["arf"].isnull()]
         computed_arf = rows_without_arf["omv"].apply(self.compute_arf)
         computed_arf.rename("arf_computed", inplace=True)
@@ -492,9 +497,7 @@ class CoeStartDateFeatureCreator(BaseEstimator, TransformerMixin):
                     "coe", "dereg_value"]].copy()
 
         # Consider original_reg_date/reg_date as coe_start_date in general
-        coe_df["coe_start_date"] = np.where(
-            X["reg_date"].isnull(), X["original_reg_date"], X["reg_date"]
-        )
+        coe_df["coe_start_date"] = coe_df.reg_date
         coe_df["coe_start_date"] = pd.to_datetime(coe_df["coe_start_date"])
         # Some rows have coe values as 10 - https://www.sgcarmart.com/used_cars/info.php?ID=1027957 (scraping error)
         # In such cases, consider DATASET_GENERATION_DATE as coe_start_date
@@ -817,3 +820,53 @@ class HierarchicalGroupImputer(BaseEstimator, TransformerMixin):
                 modified_x = modified_x[~null_records]
 
         return modified_x
+    
+class BrandRankTransformer(BaseEstimator, TransformerMixin):
+    def __init__(self):
+        self.brand_rank_mapping = {}
+        pass
+    
+    def fit(self, df):
+        temp_df = df.groupby('make').median('price')['price'].reset_index()
+        thresholds = temp_df.price.quantile([0.25,0.50,0.70,0.80,0.90, 1]).values
+        rank = 0
+        t0 = 0
+        for t1 in thresholds:
+            rank = rank + 1
+            temp = temp_df[(temp_df.price <= t1) & (temp_df.price > t0)]
+            t0 = t1
+            values = temp.make.values
+            for v in values:
+                self.brand_rank_mapping[v] = rank
+        
+        return self
+        
+    def transform(self, input_df):
+        df = input_df.copy()
+        df.reset_index(inplace=True, drop=True)
+        df.loc[:, 'brand_rank'] = df.make.apply(lambda row: self.brand_rank_mapping.get(row, 0))
+        return df
+
+class OheCategorical(BaseEstimator, TransformerMixin):
+    def __init__(self, cols, drop_first=False):
+        self.cols = cols
+        self.drop_first = drop_first
+        self.mapping = {}
+    
+    def fit(self, df):
+        cols = self.cols
+        for col in cols:
+            enc = OneHotEncoder(sparse=False, handle_unknown='ignore')
+            self.mapping[col] = enc.fit(df[[col]])
+        return self
+        
+    def transform(self, input_df):
+        cols = self.cols
+        df = input_df.copy()
+        for col in cols:
+            temp = self.mapping[col].transform(df[[col]])
+            temp_df = pd.DataFrame(temp, columns=self.mapping[col].categories_)
+            temp_df = temp_df.add_suffix(f'_{col}')
+            df = pd.concat([df, temp_df], axis=1)
+            df = df.drop([col], axis=1)
+        return df
