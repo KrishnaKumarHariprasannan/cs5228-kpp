@@ -1,16 +1,21 @@
+from __future__ import absolute_import, division
+
+import logging
 import numpy as np
 import pandas as pd
-import logging
+import re
 import scipy
 
 from datetime import datetime
+from pandas.api.types import CategoricalDtype
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import OneHotEncoder
-from pandas.api.types import CategoricalDtype
 
 
 # By observation of "coe_rebate", "dereg_value", "dereg_value_computed" for a few samples
 DATASET_GENERATION_DATE = datetime(2021, 9, 14)
+# Date on which we scraped coe text data from the web portal
+COE_SCRAPE_DATE = datetime(2021, 10, 26)
 FIELDS_TO_DROP = ["indicative_price", "eco_category"]
 
 
@@ -45,10 +50,13 @@ class PreProcessing(BaseEstimator, TransformerMixin):
         )
         df.loc[:, "reg_date"] = pd.to_datetime(df.reg_date)
         df.loc[:, "reg_date_year"] = pd.to_datetime(df.reg_date).dt.year
-        
-        df.loc[:, 'manufactured'] = np.where((df.manufactured.isnull()) | (df.manufactured > 2021),df['reg_date_year'],df['manufactured'])
-        
-        
+
+        df.loc[:, "manufactured"] = np.where(
+            (df.manufactured.isnull()) | (df.manufactured > 2021),
+            df["reg_date_year"],
+            df["manufactured"],
+        )
+
         df.loc[:, "no_of_owners"] = df["no_of_owners"].fillna(1)
         df.loc[:, "title"] = df["title"].str.lower()
         df.loc[:, "make"] = df.apply(
@@ -79,7 +87,8 @@ class PostProcessing(BaseEstimator, TransformerMixin):
             "road_tax",
             "model",
             "category",
-            "make", "price"
+            "make",
+            "price",
         ]
         pass
 
@@ -190,7 +199,7 @@ class SplitValuesToColumn(BaseEstimator, TransformerMixin):
                     self.val_list, list(map(str.strip, x.split(",")))
                 )
             )
-            .tolist()
+            .tolist(), columns=self.val_list
         )
         df_cat = df_cat.add_prefix(col + "_")
         result = pd.concat([df, df_cat], axis=1)
@@ -296,6 +305,7 @@ class CarSpecsMissingWithTypeOfVehicle(BaseEstimator, TransformerMixin):
                 df.loc[:, col] = result
         return df
 
+
 class ColumnValuesToCategory(BaseEstimator, TransformerMixin):
     """
     Creates a new column (new_col) with the values of column (col) converted into categories.
@@ -317,25 +327,28 @@ class ColumnValuesToCategory(BaseEstimator, TransformerMixin):
         df[self.new_col] = pd.cut(df[self.col], self.bins, labels=self.names)
         return df
 
+
 class OneHotTransformer(BaseEstimator, TransformerMixin):
     def __init__(self, col, categories):
         self.col = col
         self.categories = categories
 
-    def fit (self, df):
+    def fit(self, df):
         return self
 
     def transform(self, input_df):
         df = input_df.copy()
         df.reset_index(inplace=True, drop=True)
         df[self.col] = df[self.col].astype(CategoricalDtype(self.categories))
-        df = pd.concat([df, pd.get_dummies(df[self.col],prefix=self.col)], axis=1)
+        df = pd.concat(
+            [df, pd.get_dummies(df[self.col], prefix=self.col)], axis=1)
         # can include code if we want to drop the column we one-hot encoded.
         # It has not been dropped yet as some other transformer might be using it.
         # Drop it later.
         # if self.col in df.columns:
         #     df.drop([self.col],axis=1, inplace=True)
         return df
+
 
 class CoeTransformer(BaseEstimator, TransformerMixin):
     """
@@ -483,66 +496,138 @@ class ParfFeatureCreator(BaseEstimator, TransformerMixin):
 
 class CoeStartDateFeatureCreator(BaseEstimator, TransformerMixin):
     """
-    Adds a new column coe_start_date based on reg_date and coe
-    For a few
+    Adds a new column coe_start_date based on the scraped coe text information
     """
+
+    @classmethod
+    def compute_coe_from_text(cls, value):
+        delta = np.timedelta64(0, "M")
+
+        if (type(value) != str) or "COE" not in value:
+            return delta
+
+        for unit_pattern_tuple in [
+            ("Y", "([0-9]+)yr"),
+            ("M", "([0-9]+)mth"),
+            ("D", "([0-9]+)day"),
+        ]:
+            matches = re.findall(unit_pattern_tuple[1], value)
+            if len(matches):
+                # Convert day units to month before addding to delta
+                # https://numpy.org/doc/stable/reference/arrays.datetime.html#datetime-and-timedelta-arithmetic
+                if unit_pattern_tuple[0] == "D":
+                    delta += np.timedelta64(
+                        int(np.ceil(int(matches[0]) / 30)), "M")
+                else:
+                    delta += np.timedelta64(int(matches[0]),
+                                            unit_pattern_tuple[0])
+            if len(matches) > 1:
+                raise ValueError(
+                    f"Incorrect pattern identified for the combination - {listing_id} and {value}"
+                )
+
+        return delta
 
     def fit(self, X):
         return self
 
-    def transform(self, X):
-        modified_x = X.copy()
+    def transform(self, input_df):
+        print("modified")
+        X = input_df.copy()
+        X.reset_index(inplace=True, drop=True)
+        
+        if len(X) > 6000:
+            file_path = "../data/raw/train_coe_text.csv"
+        else:
+            file_path = "../data/raw/test_coe_text.csv"
 
-        coe_df = X[["reg_date", "original_reg_date",
-                    "coe", "dereg_value"]].copy()
+        coe_text = pd.read_csv(file_path)
+        coe_text.set_index("listing_id", inplace=True)
+        coe_text = coe_text[~coe_text.index.duplicated(keep="first")]
 
-        # Consider original_reg_date/reg_date as coe_start_date in general
-        coe_df["coe_start_date"] = coe_df.reg_date
-        coe_df["coe_start_date"] = pd.to_datetime(coe_df["coe_start_date"])
+        merged_df = X.merge(coe_text, on="listing_id", how="left")
+
+        merged_df["coe_expiry_days"] = merged_df.coe_text.apply(
+            self.compute_coe_from_text
+        )
+
+        incorrect_coe_expiry_mask = merged_df["coe_expiry_days"] == np.timedelta64(
+            0)
+
+        merged_df["coe_expiry_months"] = merged_df["coe_expiry_days"] / np.timedelta64(
+            1, "M"
+        )
+        merged_df["coe_expiry_date"] = COE_SCRAPE_DATE + \
+            merged_df["coe_expiry_days"]
+        merged_df["coe_start_date"] = merged_df["coe_expiry_date"] - np.timedelta64(
+            10, "Y"
+        )
+
+        # 668 rows have inactive entries on the portal and so their coe_text entries are empty. For such
+        # entries, compute the coe_start_date using known methods
+
         # Some rows have coe values as 10 - https://www.sgcarmart.com/used_cars/info.php?ID=1027957 (scraping error)
         # In such cases, consider DATASET_GENERATION_DATE as coe_start_date
-        coe_df.loc[coe_df["coe"] == 10,
-                   "coe_start_date"] = DATASET_GENERATION_DATE
+        logging.info(
+            f"CoeStartDateFeatureCreator - Found {len(merged_df[incorrect_coe_expiry_mask])} entries without COE Text"
+        )
 
-        # Compute coe_expiry date and months left
-        coe_df["coe_expiry"] = coe_df.coe_start_date + np.timedelta64(10, "Y")
-        coe_df["coe_expiry_months"] = (
-            coe_df.coe_expiry - DATASET_GENERATION_DATE
+        coe_10_mask = incorrect_coe_expiry_mask & (merged_df["coe"] == 10)
+        merged_df.loc[coe_10_mask, "coe_start_date"] = DATASET_GENERATION_DATE
+        merged_df.loc[coe_10_mask, "coe_expiry_date"] = merged_df.loc[
+            coe_10_mask, "coe_start_date"
+        ] + np.timedelta64(10, "Y")
+        merged_df.loc[coe_10_mask, "coe_expiry_months"] = (
+            merged_df.loc[coe_10_mask, "coe_expiry_date"] -
+            DATASET_GENERATION_DATE
         ) / np.timedelta64(1, "M")
 
-        # If the coe expiry is in the past (incorrect), set it as 0
-        coe_df.coe_expiry_months.clip(lower=0, inplace=True)
-
-        # For rows with incorrect coe_start_date, compute it from dereg_value
-        # These rows are not eligible for parf so it can be assumed that dereg_value == coe_rebate for such rows
-        # cleaned_df[cleaned_df.coe_expiry_months == 0][cleaned_df.dereg_value == cleaned_df.coe_rebate]
-        filter_mask = (coe_df.coe_expiry_months == 0) & (
-            ~coe_df.dereg_value.isnull())
-        filtered_df = coe_df[filter_mask].copy()
-
-        filtered_df["coe_expiry_months_computed"] = (
-            filtered_df.dereg_value * 120
-        ) / filtered_df.coe
-        filtered_df[
-            "coe_expiry_standardized"
-        ] = filtered_df.coe_expiry_months_computed.apply(
-            lambda value: np.timedelta64(int(value), "M")
+        incorrect_coe_expiry_mask = merged_df.coe_expiry_months == 0
+        logging.info(
+            f"CoeStartDateFeatureCreator - {len(merged_df[incorrect_coe_expiry_mask])} null entries left after using COE 10 "
         )
-        filtered_df["coe_start_date_computed"] = (
-            filtered_df["coe_expiry_standardized"] + DATASET_GENERATION_DATE
-        ) - np.timedelta64(10, "Y")
-
-        coe_df.loc[filter_mask, "coe_start_date"] = filtered_df[
-            "coe_start_date_computed"
+        merged_df.loc[incorrect_coe_expiry_mask, "coe_start_date"] = merged_df.loc[
+            incorrect_coe_expiry_mask, "reg_date"
         ]
-        coe_df.loc[filter_mask, "coe_expiry_months"] = filtered_df[
-            "coe_expiry_months_computed"
-        ]
+        merged_df.loc[incorrect_coe_expiry_mask, "coe_expiry_date"] = merged_df.loc[
+            incorrect_coe_expiry_mask, "coe_start_date"
+        ] + np.timedelta64(10, "Y")
+        merged_df.loc[incorrect_coe_expiry_mask, "coe_expiry_months"] = (
+            merged_df.loc[incorrect_coe_expiry_mask, "coe_expiry_date"]
+            - DATASET_GENERATION_DATE
+        ) / np.timedelta64(1, "M")
 
-        modified_x["coe_start_date"] = coe_df["coe_start_date"]
-        modified_x["coe_start_year"] = coe_df["coe_start_date"].dt.year
-        modified_x["coe_expiry_months"] = coe_df["coe_expiry_months"]
-        return modified_x
+        merged_df.coe_expiry_months.clip(lower=0, inplace=True)
+
+        incorrect_coe_expiry_mask = merged_df.coe_expiry_months == 0
+        logging.info(
+            f"CoeStartDateFeatureCreator - {len(merged_df[incorrect_coe_expiry_mask])} null entries left after using reg_date "
+        )
+
+        # Out of 133 applicable entries, 8 do not fall under the assumption here which is that all remaining cars are COE cars
+        merged_df.loc[incorrect_coe_expiry_mask, "coe_expiry_months"] = (
+            merged_df[incorrect_coe_expiry_mask].dereg_value * 120
+        ) / merged_df[incorrect_coe_expiry_mask].coe
+
+        # If the dereg_value is NaN, assume that there are 120 months left on its COE
+        # Example: https://www.sgcarmart.com/used_cars/info.php?ID=994090
+        # 11 such rows are present here
+        merged_df.loc[merged_df.coe_expiry_months.isnull(),
+                      "coe_expiry_months"] = 120
+
+        merged_df.loc[incorrect_coe_expiry_mask, "coe_expiry_date"] = (
+            merged_df.loc[incorrect_coe_expiry_mask, "coe_expiry_months"].apply(
+                lambda value: np.timedelta64(int(value), "M")
+            )
+            + DATASET_GENERATION_DATE
+        )
+        merged_df.loc[incorrect_coe_expiry_mask, "coe_start_date"] = merged_df.loc[
+            incorrect_coe_expiry_mask, "coe_expiry_date"
+        ] - np.timedelta64(10, "Y")
+
+        merged_df["coe_start_year"] = merged_df["coe_start_date"].dt.year
+
+        return merged_df
 
 
 class CoeRebateFeatureCreator(BaseEstimator, TransformerMixin):
@@ -614,11 +699,13 @@ class DeregValueTransformer(BaseEstimator, TransformerMixin):
         if len(modified_x[null_mask]):
             if self.fill_zero:
                 logging.info(
-                    f"DeregValueTransformer - replacing {len(modified_x[null_mask])} null values with 0")
+                    f"DeregValueTransformer - replacing {len(modified_x[null_mask])} null values with 0"
+                )
                 modified_x.loc[null_mask, "dereg_value"] = 0
             else:
                 logging.info(
-                    f"DeregValueTransformer - removing {len(modified_x[null_mask])} for which dereg_value cannot be computed")
+                    f"DeregValueTransformer - removing {len(modified_x[null_mask])} for which dereg_value cannot be computed"
+                )
                 modified_x = modified_x.loc[~null_mask]
 
         return modified_x
@@ -649,7 +736,8 @@ class DepreciationTransformer(BaseEstimator, TransformerMixin):
         if len(modified_x[depreciation_mask]):
             if self.fill_zero:
                 logging.info(
-                    f"DepreciationTransformer - replacing {len(modified_x[depreciation_mask])} null values with 0")
+                    f"DepreciationTransformer - replacing {len(modified_x[depreciation_mask])} null values with 0"
+                )
                 modified_x.loc[depreciation_mask, "depreciation"] = 0
             else:
                 logging.info(
@@ -820,15 +908,17 @@ class HierarchicalGroupImputer(BaseEstimator, TransformerMixin):
                 modified_x = modified_x[~null_records]
 
         return modified_x
-    
+
+
 class BrandRankTransformer(BaseEstimator, TransformerMixin):
     def __init__(self):
         self.brand_rank_mapping = {}
         pass
-    
+
     def fit(self, df):
-        temp_df = df.groupby('make').median('price')['price'].reset_index()
-        thresholds = temp_df.price.quantile([0.25,0.50,0.70,0.80,0.90, 1]).values
+        temp_df = df.groupby("make").median("price")["price"].reset_index()
+        thresholds = temp_df.price.quantile(
+            [0.25, 0.50, 0.70, 0.80, 0.90, 1]).values
         rank = 0
         t0 = 0
         for t1 in thresholds:
@@ -838,35 +928,38 @@ class BrandRankTransformer(BaseEstimator, TransformerMixin):
             values = temp.make.values
             for v in values:
                 self.brand_rank_mapping[v] = rank
-        
+
         return self
-        
+
     def transform(self, input_df):
         df = input_df.copy()
         df.reset_index(inplace=True, drop=True)
-        df.loc[:, 'brand_rank'] = df.make.apply(lambda row: self.brand_rank_mapping.get(row, 0))
+        df.loc[:, "brand_rank"] = df.make.apply(
+            lambda row: self.brand_rank_mapping.get(row, 0)
+        )
         return df
+
 
 class OheCategorical(BaseEstimator, TransformerMixin):
     def __init__(self, cols, drop_first=False):
         self.cols = cols
         self.drop_first = drop_first
         self.mapping = {}
-    
+
     def fit(self, df):
         cols = self.cols
         for col in cols:
-            enc = OneHotEncoder(sparse=False, handle_unknown='ignore')
+            enc = OneHotEncoder(sparse=False, handle_unknown="ignore")
             self.mapping[col] = enc.fit(df[[col]])
         return self
-        
+
     def transform(self, input_df):
         cols = self.cols
         df = input_df.copy()
         for col in cols:
             temp = self.mapping[col].transform(df[[col]])
             temp_df = pd.DataFrame(temp, columns=self.mapping[col].categories_)
-            temp_df = temp_df.add_suffix(f'_{col}')
+            temp_df = temp_df.add_suffix(f"_{col}")
             df = pd.concat([df, temp_df], axis=1)
             df = df.drop([col], axis=1)
         return df
