@@ -252,7 +252,7 @@ class CarSpecificationsTransformer(BaseEstimator, TransformerMixin):
                 result = df.apply(
                     lambda row: group_mapping.get(
                         self.get_key(row, group_cols))
-                    if pd.isnull(row[col])
+                    if (pd.isnull(row[col]) or row[col]==0)
                     else row[col],
                     axis=1,
                 )
