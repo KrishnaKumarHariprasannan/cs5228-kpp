@@ -523,7 +523,7 @@ class CoeStartDateFeatureCreator(BaseEstimator, TransformerMixin):
                                             unit_pattern_tuple[0])
             if len(matches) > 1:
                 raise ValueError(
-                    f"Incorrect pattern identified for the combination - {listing_id} and {value}"
+                    f"Incorrect pattern identified for the pattern - {value}"
                 )
 
         return delta
