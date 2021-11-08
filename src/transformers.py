@@ -252,7 +252,7 @@ class CarSpecificationsTransformer(BaseEstimator, TransformerMixin):
                 result = df.apply(
                     lambda row: group_mapping.get(
                         self.get_key(row, group_cols))
-                    if (pd.isnull(row[col]) or row[col]==0)
+                    if (pd.isnull(row[col]) or row[col] == 0)
                     else row[col],
                     axis=1,
                 )
@@ -532,10 +532,9 @@ class CoeStartDateFeatureCreator(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, input_df):
-        print("modified")
         X = input_df.copy()
         X.reset_index(inplace=True, drop=True)
-        
+
         if len(X) > 6000:
             file_path = "../data/raw/train_coe_text.csv"
         else:
@@ -707,43 +706,6 @@ class DeregValueTransformer(BaseEstimator, TransformerMixin):
                     f"DeregValueTransformer - removing {len(modified_x[null_mask])} for which dereg_value cannot be computed"
                 )
                 modified_x = modified_x.loc[~null_mask]
-
-        return modified_x
-
-
-class DepreciationTransformer(BaseEstimator, TransformerMixin):
-    """
-    Imputes missing depreciation values based on its corresponding price and parf
-    """
-
-    def __init__(self, fill_zero=True):
-        super(DepreciationTransformer, self).__init__()
-        self.fill_zero = fill_zero
-
-    def fit(self, X):
-        return self
-
-    def transform(self, X):
-        modified_x = X.copy()
-        depreciation_mask = X.depreciation.isnull()
-
-        # Ideally, this should be (price - parf) / no_of_coe_years_left but this formula gives
-        # depreciation which are vastly different to the ones in the given dataset - because of incorrect coe_start_date
-        # which in turn is due to a scraping error in dataset generation
-        #         modified_x.loc[depreciation_mask, "depreciation"] = (
-        #             X.loc[depreciation_mask, "price"] - X.loc[depreciation_mask, "parf"]
-        #         ) / 10
-        if len(modified_x[depreciation_mask]):
-            if self.fill_zero:
-                logging.info(
-                    f"DepreciationTransformer - replacing {len(modified_x[depreciation_mask])} null values with 0"
-                )
-                modified_x.loc[depreciation_mask, "depreciation"] = 0
-            else:
-                logging.info(
-                    f"DepreciationTransformer - removing {len(modified_x[depreciation_mask])} rows with null depreciation"
-                )
-                modified_x = modified_x[~depreciation_mask]
 
         return modified_x
 
