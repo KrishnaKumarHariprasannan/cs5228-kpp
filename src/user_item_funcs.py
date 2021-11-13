@@ -3,7 +3,6 @@ import numpy as np
 from src.transformers import *
 from sklearn.pipeline import Pipeline
 from sklearn.metrics.pairwise import cosine_similarity
-import faiss
 import time
 
 price_ranges = ['Below $10,000', '$10,001 to $20,000', '$20,001 to $30,000', '$30,001 to $40,000', '$40,001 to $50,000',

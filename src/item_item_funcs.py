@@ -3,7 +3,6 @@ import numpy as np
 from src.transformers import *
 from sklearn.pipeline import Pipeline
 from sklearn.metrics.pairwise import cosine_similarity
-import faiss
 import time
 
 
