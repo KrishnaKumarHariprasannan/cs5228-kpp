@@ -135,12 +135,12 @@ def get_top_recommendations_user_item(similarity_user_item, ind_ordered, x_items
         percentile = np.percentile(similarity_user_item, per_num)
         count = (similarity_user_item_ordered > percentile).sum()
 
-    print('ind_ordered: ', ind_ordered)
+    # print('ind_ordered: ', ind_ordered)
     sample_similarity_user_item_ordered = similarity_user_item_ordered[:count]
     sample_indices = ind_ordered[:count]
     sample_prob = sample_similarity_user_item_ordered / np.sum(sample_similarity_user_item_ordered)
     topk_indices = np.random.choice(sample_indices, size=k, replace=False, p=sample_prob)
-    print('topk_indices: ', topk_indices)
+    # print('topk_indices: ', topk_indices)
     df_result = df_prepared_final.iloc[topk_indices,:]
 
     return df_result
