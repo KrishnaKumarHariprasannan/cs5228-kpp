@@ -13,13 +13,13 @@ test = pd.read_csv("../data/processed/test.csv", sep=",")
 
 def get_user_recoms(price, depreciation, type_of_vehicle, top_n):
     user_pref_dict = {'price':price, 'depreciation':depreciation, 'type_of_vehicle':type_of_vehicle}
-    if not price:
+    if (not price) or (price=='Select'):
         user_pref_dict.pop('price')
-    if not depreciation:
+    if (not depreciation) or (depreciation=='Select'):
         user_pref_dict.pop('depreciation')
-    if not type_of_vehicle:
+    if (not type_of_vehicle) or (type_of_vehicle=='Select'):
         user_pref_dict.pop('type_of_vehicle')
-    print(user_pref_dict)
+    # print(user_pref_dict)
     user_pref_cols = get_user_pref_cols(user_pref_dict)
     df_train_user_pref_cols = train.loc[:, ['listing_id']+user_pref_cols]
     df_prepared_num = prepare_df_num(df_train_user_pref_cols, user_pref_dict, pref_dict_num)
@@ -40,9 +40,10 @@ def get_user_recoms(price, depreciation, type_of_vehicle, top_n):
     ind_ordered = np.argsort(similarity_user_item)[::-1]
     df_top_user_item = get_top_recommendations_user_item(similarity_user_item, ind_ordered, x_items, y_items, top_n, train)
     # print('user_pref_dict: ', user_pref_dict)
-    return df_top_user_item.loc[:, ['listing_id', 'make', 'model', 'depreciation', 'price', 'type_of_vehicle']]
+    # return df_top_user_item.loc[:, ['listing_id', 'make', 'model', 'depreciation', 'price', 'type_of_vehicle']]
+    return df_top_user_item
 
-def get_similar_items(listing_id_chosen, top_n):
+def get_similar_items(listing_id_chosen, top_n=10):
     df_recommend_ii = train.loc[:, ['listing_id','make', 'vehicle_age', 'type_of_vehicle', 'depreciation',
                    'dereg_value', 'mileage', 'price', 'engine_cap',  'fuel_type_diesel',
                    'fuel_type_petrol-electric', 'fuel_type_petrol', 'fuel_type_electric','transmission_auto',
@@ -61,6 +62,8 @@ def get_similar_items(listing_id_chosen, top_n):
     similarity_item_item = cosine_similarity(y_chosen, y_items_ii)[0]
     indices_ii_ordered = np.argsort(similarity_item_item)[::-1]
     df_top_ii = get_top_recommendations_ii(similarity_item_item, indices_ii_ordered, x_items_ii, y_items_ii, top_n+1, train)
+    df_top_ii = df_top_ii[df_top_ii.listing_id != listing_id_chosen]
     # df_top_ii = df_top_ii[df_top_ii.listing_id != listing_id_chosen]
-    return df_top_ii.loc[:, ['listing_id','make', 'model', 'vehicle_age', 'type_of_vehicle', 'depreciation',
-                   'dereg_value', 'mileage', 'price', 'engine_cap',  'fuel_type','transmission', 'brand_rank']]
+    # return df_top_ii.loc[:, ['listing_id','make', 'model', 'vehicle_age', 'type_of_vehicle', 'depreciation',
+    #                'dereg_value', 'mileage', 'price', 'engine_cap',  'fuel_type','transmission', 'brand_rank']]
+    return df_top_ii
