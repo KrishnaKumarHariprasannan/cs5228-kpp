@@ -1,3 +1,7 @@
+# This file contains all packages required to setup developer environment
+# for our team.
+#
+# NOTE: Presence of all these packages is not necessary to reproduce results given in report
 name: kpp
 channels:
   - conda-forge
