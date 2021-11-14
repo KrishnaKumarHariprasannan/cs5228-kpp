@@ -11,7 +11,6 @@ from pandas.api.types import CategoricalDtype
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import OneHotEncoder
 
-
 # By observation of "coe_rebate", "dereg_value", "dereg_value_computed" for a few samples
 DATASET_GENERATION_DATE = datetime(2021, 9, 14)
 # Date on which we scraped coe text data from the web portal
@@ -20,14 +19,25 @@ FIELDS_TO_DROP = ["indicative_price", "eco_category"]
 
 
 def get_make_from_title(make_list, title):
+    """
+    This method is used to impute the make column.
+    The title column also contains the make and model value.
+    :param make_list: list containing unique make values
+    :param title: title text
+    :return:
+    """
     title = title.split(" ")
     for i in range(len(title)):
-        if " ".join(title[0: i + 1]) in make_list:
-            return " ".join(title[0: i + 1])
+        if " ".join(title[0 : i + 1]) in make_list:
+            return " ".join(title[0 : i + 1])
     return "unknwon"
 
 
 def make_category_vector(cat_list, x):
+    """
+    Convert the category column to multiple columns
+    :return: vector containing one-hot encoding of categories
+    """
     vector = [0] * len(cat_list)
     for i, cat in enumerate(cat_list):
         if cat in x:
@@ -36,6 +46,12 @@ def make_category_vector(cat_list, x):
 
 
 class PreProcessing(BaseEstimator, TransformerMixin):
+    """
+    This class is used to pre-process the raw dataset.
+    It converts the date-time columns to the respective data-types.
+    Bringing the dataset in a uniform case i.e. lowercase.
+    """
+
     def __init__(self):
         self.make_list = []
         pass
@@ -69,40 +85,14 @@ class PreProcessing(BaseEstimator, TransformerMixin):
         return df
 
 
-class PostProcessing(BaseEstimator, TransformerMixin):
-    def __init__(self):
-        self.columns_to_drop = [
-            "indicative_price",
-            "original_reg_date",
-            "opc_scheme",
-            "lifespan",
-            "fuel_type",
-            "description",
-            "features",
-            "accessories",
-            "listing_id",
-            "title",
-            "eco_category",
-            "reg_date",
-            "road_tax",
-            "model",
-            "category",
-            "make",
-            "price",
-        ]
-        pass
-
-    def fit(self, df):
-        #         self.make_list = df.make.unique()
-        return self
-
-    def transform(self, input_df):
-        df = input_df.copy()
-        df = df.drop(self.columns_to_drop, axis=1, errors="ignore")
-        return df
-
-
 class GroupMissingValueImputer(BaseEstimator, TransformerMixin):
+    """
+    A generic function to impute columns based on
+    the group_by columns and the aggregation strategy specified.
+    The class stores the mapping during the fit function and
+    applied the same mapping when executing transform function
+    """
+
     def __init__(self, col, group_cols, agg="mean"):
         self.group_mapping = {}
         self.group_cols = group_cols
@@ -113,18 +103,15 @@ class GroupMissingValueImputer(BaseEstimator, TransformerMixin):
         col = self.col
         if self.agg == "first":
             self.group_mapping = (
-                df[~df[col].isnull()].groupby(
-                    self.group_cols).first()[col].to_dict()
+                df[~df[col].isnull()].groupby(self.group_cols).first()[col].to_dict()
             )
         elif self.agg == "mean":
             self.group_mapping = (
-                df[~df[col].isnull()].groupby(
-                    self.group_cols).mean()[col].to_dict()
+                df[~df[col].isnull()].groupby(self.group_cols).mean()[col].to_dict()
             )
         elif self.agg == "median":
             self.group_mapping = (
-                df[~df[col].isnull()].groupby(
-                    self.group_cols).median()[col].to_dict()
+                df[~df[col].isnull()].groupby(self.group_cols).median()[col].to_dict()
             )
         else:
             raise Exception("Unknown Agg type")
@@ -153,27 +140,12 @@ class GroupMissingValueImputer(BaseEstimator, TransformerMixin):
         return df
 
 
-class MeanMissingValueImputer(BaseEstimator, TransformerMixin):
-    def __init__(self, cols, agg="mean"):
-        self.mapping = {}
-        self.agg = agg
-        self.cols = cols
-
-    def fit(self, df):
-        cols = self.cols
-        for col in cols:
-            self.mapping[col] = df[col].mean()
-        return self
-
-    def transform(self, input_df):
-        cols = self.cols
-        df = input_df.copy()
-        for col in cols:
-            df.loc[:, col] = df.fillna(self.mapping[col])
-        return df
-
-
 class SplitValuesToColumn(BaseEstimator, TransformerMixin):
+    """
+    This transformer is used to create a new column for each value.
+    The columns are boolean valued columns.
+    """
+
     def __init__(self, col):
         self.val_list = {}
         self.col = col
@@ -199,7 +171,8 @@ class SplitValuesToColumn(BaseEstimator, TransformerMixin):
                     self.val_list, list(map(str.strip, x.split(",")))
                 )
             )
-            .tolist(), columns=self.val_list
+            .tolist(),
+            columns=self.val_list,
         )
         df_cat = df_cat.add_prefix(col + "_")
         result = pd.concat([df, df_cat], axis=1)
@@ -228,8 +201,7 @@ class CarSpecificationsTransformer(BaseEstimator, TransformerMixin):
         for i in range(len(group_cols)):
             if self.agg == "mean":
                 group_mapping = (
-                    df[~df[col].isnull()].groupby(
-                        group_cols).mean()[col].to_dict()
+                    df[~df[col].isnull()].groupby(group_cols).mean()[col].to_dict()
                 )
             elif self.agg == "mode":
                 group_mapping = (
@@ -250,8 +222,7 @@ class CarSpecificationsTransformer(BaseEstimator, TransformerMixin):
 
             if col is not None and col in df.columns:
                 result = df.apply(
-                    lambda row: group_mapping.get(
-                        self.get_key(row, group_cols))
+                    lambda row: group_mapping.get(self.get_key(row, group_cols))
                     if (pd.isnull(row[col]) or row[col] == 0)
                     else row[col],
                     axis=1,
@@ -296,8 +267,7 @@ class CarSpecsMissingWithTypeOfVehicle(BaseEstimator, TransformerMixin):
             col = cols[i]
             if col is not None and col in df.columns:
                 result = df.apply(
-                    lambda row: group_mapping_list[i].get(
-                        row["type_of_vehicle"])
+                    lambda row: group_mapping_list[i].get(row["type_of_vehicle"])
                     if pd.isnull(row[col])
                     else row[col],
                     axis=1,
@@ -340,8 +310,7 @@ class OneHotTransformer(BaseEstimator, TransformerMixin):
         df = input_df.copy()
         df.reset_index(inplace=True, drop=True)
         df[self.col] = df[self.col].astype(CategoricalDtype(self.categories))
-        df = pd.concat(
-            [df, pd.get_dummies(df[self.col], prefix=self.col)], axis=1)
+        df = pd.concat([df, pd.get_dummies(df[self.col], prefix=self.col)], axis=1)
         # can include code if we want to drop the column we one-hot encoded.
         # It has not been dropped yet as some other transformer might be using it.
         # Drop it later.
@@ -374,8 +343,7 @@ class CoeTransformer(BaseEstimator, TransformerMixin):
 
         # Replace incorrect coe values with mean coe for 2021
         # Example: https://www.sgcarmart.com/used_cars/info.php?ID=1017335
-        combined_x.coe.replace(
-            10.0, self.mean_coe_per_year.loc[2021].coe, inplace=True)
+        combined_x.coe.replace(10.0, self.mean_coe_per_year.loc[2021].coe, inplace=True)
 
         coe_mask = combined_x["coe"].isnull()
 
@@ -440,7 +408,6 @@ class AgeFeatureCreator(BaseEstimator, TransformerMixin):
     """
 
     def fit(self, X):
-
         return self
 
     def transform(self, X):
@@ -516,11 +483,9 @@ class CoeStartDateFeatureCreator(BaseEstimator, TransformerMixin):
                 # Convert day units to month before addding to delta
                 # https://numpy.org/doc/stable/reference/arrays.datetime.html#datetime-and-timedelta-arithmetic
                 if unit_pattern_tuple[0] == "D":
-                    delta += np.timedelta64(
-                        int(np.ceil(int(matches[0]) / 30)), "M")
+                    delta += np.timedelta64(int(np.ceil(int(matches[0]) / 30)), "M")
                 else:
-                    delta += np.timedelta64(int(matches[0]),
-                                            unit_pattern_tuple[0])
+                    delta += np.timedelta64(int(matches[0]), unit_pattern_tuple[0])
             if len(matches) > 1:
                 raise ValueError(
                     f"Incorrect pattern identified for the pattern - {value}"
@@ -550,14 +515,12 @@ class CoeStartDateFeatureCreator(BaseEstimator, TransformerMixin):
             self.compute_coe_from_text
         )
 
-        incorrect_coe_expiry_mask = merged_df["coe_expiry_days"] == np.timedelta64(
-            0)
+        incorrect_coe_expiry_mask = merged_df["coe_expiry_days"] == np.timedelta64(0)
 
         merged_df["coe_expiry_months"] = merged_df["coe_expiry_days"] / np.timedelta64(
             1, "M"
         )
-        merged_df["coe_expiry_date"] = COE_SCRAPE_DATE + \
-            merged_df["coe_expiry_days"]
+        merged_df["coe_expiry_date"] = COE_SCRAPE_DATE + merged_df["coe_expiry_days"]
         merged_df["coe_start_date"] = merged_df["coe_expiry_date"] - np.timedelta64(
             10, "Y"
         )
@@ -577,8 +540,7 @@ class CoeStartDateFeatureCreator(BaseEstimator, TransformerMixin):
             coe_10_mask, "coe_start_date"
         ] + np.timedelta64(10, "Y")
         merged_df.loc[coe_10_mask, "coe_expiry_months"] = (
-            merged_df.loc[coe_10_mask, "coe_expiry_date"] -
-            DATASET_GENERATION_DATE
+            merged_df.loc[coe_10_mask, "coe_expiry_date"] - DATASET_GENERATION_DATE
         ) / np.timedelta64(1, "M")
 
         incorrect_coe_expiry_mask = merged_df.coe_expiry_months == 0
@@ -611,8 +573,7 @@ class CoeStartDateFeatureCreator(BaseEstimator, TransformerMixin):
         # If the dereg_value is NaN, assume that there are 120 months left on its COE
         # Example: https://www.sgcarmart.com/used_cars/info.php?ID=994090
         # 11 such rows are present here
-        merged_df.loc[merged_df.coe_expiry_months.isnull(),
-                      "coe_expiry_months"] = 120
+        merged_df.loc[merged_df.coe_expiry_months.isnull(), "coe_expiry_months"] = 120
 
         merged_df.loc[incorrect_coe_expiry_mask, "coe_expiry_date"] = (
             merged_df.loc[incorrect_coe_expiry_mask, "coe_expiry_months"].apply(
@@ -639,8 +600,7 @@ class CoeRebateFeatureCreator(BaseEstimator, TransformerMixin):
 
     def transform(self, X):
         modified_x = X.copy()
-        modified_x["coe_rebate"] = (
-            modified_x.coe * modified_x.coe_expiry_months) / 120
+        modified_x["coe_rebate"] = (modified_x.coe * modified_x.coe_expiry_months) / 120
 
         # If the computed coe_rebate is 0 (those records for which the coe_start_date is incorrect),
         # use dereg_value as coe_rebate.
@@ -757,8 +717,7 @@ class LifespanRestrictionFeatureCreator(BaseEstimator, TransformerMixin):
     def transform(self, X):
         modified_x = X.copy()
         modified_x["lifespan_restriction"] = -1
-        modified_x.loc[modified_x["lifespan"].isnull(),
-                       "lifespan_restriction"] = 1
+        modified_x.loc[modified_x["lifespan"].isnull(), "lifespan_restriction"] = 1
 
         return modified_x
 
@@ -780,8 +739,7 @@ class CountUniqueItemsFeatureCreator(BaseEstimator, TransformerMixin):
 
     def transform(self, X):
         modified_x = X.copy()
-        new_feature = pd.Series(
-            np.zeros(len(X)), index=X.index, dtype=np.int16)
+        new_feature = pd.Series(np.zeros(len(X)), index=X.index, dtype=np.int16)
         new_feature.loc[~X[self.feature].isnull()] = X[~X[self.feature].isnull()][
             self.feature
         ].apply(lambda value: len(value.split(self.separator)))
@@ -793,7 +751,6 @@ class HierarchicalGroupImputer(BaseEstimator, TransformerMixin):
     """
     For missing values in the given feature, this imputer tries filling such values with the agg value
     derived from each group and as fallback uses the entire feature columns' agg value
-
     If fallback is True, for records that cannot be filled with agg value of any of the groups provided,
     it will be filled with the agg value of the feature column
     """
@@ -873,14 +830,20 @@ class HierarchicalGroupImputer(BaseEstimator, TransformerMixin):
 
 
 class BrandRankTransformer(BaseEstimator, TransformerMixin):
+    """
+    This class adds the brand rank column to the dataset.
+    The brand rank is calculated using the price percentile.
+    Each brand is given a rank, the highest value corresponds to
+    the most luxurious brand.
+    """
+
     def __init__(self):
         self.brand_rank_mapping = {}
         pass
 
     def fit(self, df):
         temp_df = df.groupby("make").median("price")["price"].reset_index()
-        thresholds = temp_df.price.quantile(
-            [0.25, 0.50, 0.70, 0.80, 0.90, 1]).values
+        thresholds = temp_df.price.quantile([0.25, 0.50, 0.70, 0.80, 0.90, 1]).values
         rank = 0
         t0 = 0
         for t1 in thresholds:
@@ -903,6 +866,13 @@ class BrandRankTransformer(BaseEstimator, TransformerMixin):
 
 
 class OheCategorical(BaseEstimator, TransformerMixin):
+    """
+    This transformer is used to encode categorical
+    features as a one-hot numeric array. The mapping
+    is saved during the fit method and same mapping is used
+    during the transform phase.
+    """
+
     def __init__(self, cols, drop_first=False):
         self.cols = cols
         self.drop_first = drop_first
